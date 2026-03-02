@@ -10,18 +10,35 @@ def review_code(diff_text):
 
     # Write a multi-line f-string prompt that includes {diff_text}
     # Tell Gemini to act as a code reviewer and focus on security, bugs, performance
-    prompt = f""" Gemini, play the role of a code reviewer for {diff_text}.
-    Review the code differences with a focus on security, bugs and performance.
-    Return the review in a structured format with the following sections:
-    - Summary: A brief summary of the changes
-    - Security: A list of security issues and descriptions found in the code
-    - Bugs: A list of bugs found in the code
-    - Performance: A list of performance issues found in the code
-    - Score: A score out of 100 for the code review
-    - Fix: One suggested fix for each issue found in the code
+    prompt = f"""You are an expert code reviewer. Review the following code diff and provide feedback.
 
-    If the code is good, return a score of 100 or say its good.
-    """
+    Focus on:
+    1. Security vulnerabilities
+    2. Bug risks
+    3. Performance issues
+    4. Best practice violations
+
+    For each issue found, provide:
+    - Severity: HIGH / MEDIUM / LOW
+    - Description of the issue
+    - Suggested fix
+
+    If the code looks good, say so.
+
+    IMPORTANT: At the very end of your review, add a severity summary line in exactly this format:
+    SEVERITY_SUMMARY: <level>
+    Where <level> is one of: CRITICAL, WARNING, GOOD
+
+    Use CRITICAL if any HIGH severity issues exist.
+    Use WARNING if only MEDIUM or LOW severity issues exist.
+    Use GOOD if no issues found.
+
+    Code diff to review:
+
+    {diff_text}
+
+
+    Provide your review in a clear, structured format, ending with the SEVERITY_SUMMARY line."""
 
     # Send the prompt to the model and get a response
     response = client.models.generate_content(
@@ -30,6 +47,16 @@ def review_code(diff_text):
 
     # Return just the text from the response
     return response.text
+
+
+def parse_severity(review_text):
+    """Extract severity level from the review output."""
+    for line in review_text.strip().split("\n"):
+        if line.strip().startswith("SEVERITY_SUMMARY:"):
+            level = line.split(":", 1)[1].strip().upper()
+            if level in ("CRITICAL", "WARNING", "GOOD"):
+                return level
+    return "WARNING"  # Default to WARNING if parsing fails
 
 
 if __name__ == "__main__":
@@ -41,4 +68,9 @@ if __name__ == "__main__":
         diff_content = sys.stdin.read()
 
     review = review_code(diff_content)
+    severity = parse_severity(review)
+
     print(review)
+
+    with open("severity.txt", "w") as f:
+        f.write(severity)
